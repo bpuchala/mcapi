@@ -51,25 +51,13 @@
 #   # single-valued attributes, pre-defined for each otype
 #   metadata:
 #     (can update): name, description, ptype
-#     (cannot update): id, otype, birthtime, mtime, n_relationships, n_attributes, n_attribute_sets
-#
-#   # custom attributes, key -> (optionally) multiple values
-#   # get summary list with object data? or just n_attributes?
-#   attributes = [
-#     {'name': <attribute_name>, 'id':<id>},
-#     ...
-#   ]
-#
-#   # attributes sets: arbitrary groupings of attributes, for organization / re-use
-#   # get summary list with object data? or just n_attribute_sets?
-#   attribute_sets = [
-#     {'name':<name>, 'id': <id>, (size?)}
-#   ]
+#     (cannot update): id, otype, birthtime, mtime, n_relationships
 #
 #   # relationships: describe relationships
 #   # - whether a particular relationship is allowed
 #   #   is determined from RELATIONSHIPS master schema (see below)
 #   # - get summary list with object data? or just n_relationships?
+#   # - includes attributes & attribute sets with 'hasAttribute' and 'hasAttributeSet'
 #   relationships: [
 #     {'type': 'used', 'object_id': <id>, 'object_otype': 'sample', 'object_name': <name>},
 #     {'type': 'has', 'object_id': <id>, 'object_otype': 'attribute_set', 'object_name': <name>},
@@ -480,6 +468,18 @@ RELATIONSHIPS = {
             'reverse': 'isAssociatedWith',
             'allowed': [{'type': [['entity'], ['file']], 'n': ['*', '*']}]
         },
+        'hasAttribute': {
+            'reverse': 'isAttributeOf',
+            'allowed': [
+                {'type': [['process', 'sample', 'sample_state', 'file'], ['attribute']], 'n': ['*', "*"]}
+            ]
+        },
+        'hasAttributeSet': {
+            'reverse': 'isAttributeSetOf',
+            'allowed': [
+                {'type': [['process', 'sample', 'sample_state', 'file'], ['attribute']], 'n': ['*', "*"]}
+            ]
+        },
         'hasValue': {
             'reverse': 'isValueOf',
             'allowed': [{'type': [['attribute'], ['attribute_value']], 'n': ['*', 1]}]
@@ -498,7 +498,77 @@ RELATIONSHIPS = {
     }
 
 
-# ### Sketch of most essential api functions ###
+# ### Sketch of most essential functions ###
+
+### API calls ###
+
+#
+# # users
+# get_all_users(remote=None)
+# get_apikey(user_id, password, remote=None)
+#
+# # projects
+# get_all_projects(remote)
+#
+# # files & directories
+#
+# get_file_or_directory_by_path(path, project_id=None, remote=None)
+# download_file_by_id(file_id, local_path, project_id=None, remote=None)
+# download_file_by_path(remote_path, local_path, project_id=None, remote=None)
+# upload_file(local_path, remote_path, project_id=None, remote=None)
+# <globus requests>
+#
+#
+# # objects
+#
+# get_object_models(remote=None)
+# create(otype, data={}, project_id=None, experiment_id=None, remote=None)
+# create_many(data=[<list of objects with otype and data>], project_id=None, experiment_id=None, remote=None)
+# chown_user(object_id, new_user_owner_id, otype=None, project_id=None, experiment_id=None, remote=None)
+# chown_project(object_id, new_project_owner_id, otype=None, project_id=None, experiment_id=None, remote=None)
+# get(object_id=None, object_type=None, project_id=None, experiment_id=None, remote=None) -> return all matching objects
+# delete(object_id=None, otype=None, project_id=None, experiment_id=None, remote=None) -> delete all matching
+# update(object_id, data={}, otype=None, project_id=None, experiment_id=None, remote=None)
+# update_many(data=[<list of objects with id and data>], otype=None, project_id=None, experiment_id=None, remote=None)
+#
+#
+# relationships
+#
+# get_relationship_models(remote=None)
+# create_relationship(subject_id, relationship_type, object_id, subject_otype=None, object_otype=None, project_id=None, experiment_id=None, remote=None)
+# delete_relationships(
+#   relationship_type=None,
+#   subject_id=None,
+#   subject_type=None,
+#   object_id=None,
+#   object_type=None,
+#   project_id=None, experiment_id=None, remote=None) -> delete all matching
+# get_relationships(
+#   relationship_type=None,
+#   subject_id=None,
+#   subject_type=None,
+#   object_id=None,
+#   object_type=None,
+#   project_id=None, experiment_id=None, remote=None) -> return all matching
+#
+#
+# # selections: also uses object 'create', 'get', etc.
+#
+# select(selection_id, stype=None, project_id=None, experiment_id=None, remote=None)
+#   -> returns an iterable of objects that were selected
+#
+# # datasets
+#
+# get_all_datasets_from_remote(remote=None)
+# get_all_datasets_from_project(project_id, remote=None)
+# download_dataset_zipfile(dataset_id, output_file_path, remote=None)
+# unpublish_dataset(dataset_id, project_id=None, remote=None)
+# publish_dataset(dataset_id, project_id=None, remote=None)
+# publish_private_dataset(dataset_id, project_id=None, remote=None)
+
+
+### Not API calls ###
+
 #
 # # config
 # config = Config(path=None)
@@ -508,13 +578,6 @@ RELATIONSHIPS = {
 # add_remote(username, mcurl, config)
 #
 # remote = Remote(remote_config=None)
-#
-# # users
-# get_all_users(remote=None)
-#
-# # projects
-# create_project(name, description, remote=None)
-# get_all_projects(remote)
 #
 # # local projects
 # init_project(name, description, prefix=None, remote=None)
@@ -528,53 +591,6 @@ RELATIONSHIPS = {
 # make_local_expt(proj)
 #
 # # files & directories
-#
-# # tree_functions:
-# #   get_file_by_id, get_file_by_path
-# #   get_directory_by_id, get_directory_by_path, get_children
 # #   standard_download, globus_download
 # #   standard_upload, globus_upload
 # #   treecompare, mkdir, remove, move,
-#
-# # objects
-#
-# create(otype, name, description, project_id=None, experiment_id=None, remote=None)
-# chown_user(object_id, new_user_owner_id, otype=None, project_id=None, experiment_id=None, remote=None)
-# chown_project(object_id, new_project_owner_id, otype=None, project_id=None, experiment_id=None, remote=None)
-# get(object_id, otype=None, project_id=None, experiment_id=None, remote=None)
-# get_relationships(
-#   object_id=None,
-#   relationship_type=None, # None=select all, value->select if equal, list->join
-#   subject_id=None,
-#   subject_type=None,
-#   otype=None,
-#    project_id=None, experiment_id=None, remote=None)
-# delete(object_id, otype=None, project_id=None, experiment_id=None, remote=None)
-# update(object_data, otype=None, project_id=None, experiment_id=None, remote=None)
-#
-# make_relationship(subject_id, relationship_type, object_id, subject_otype=None, object_otype=None, project_id=None, experiment_id=None, remote=None)
-# delete_relationship(subject_id, relationship_type, object_id, subject_otype=None, object_otype=None, project_id=None, experiment_id=None, remote=None)
-#
-# # create/delete attribute on object
-# create_attribute(subject_id, attribute_name, otype=None, project_id=None, experiment_id=None, remote=None)
-# delete_attribute(id, attribute_name, otype=None, project_id=None, experiment_id=None, remote=None)
-# get_attribute(id, attribute_name, otype=None, project_id=None, experiment_id=None, remote=None)
-#
-# add_atribute(object_id, attribute_id, otype=None, project_id=None, experiment_id=None, remote=None)
-# remove_attribute(object_id, attribute_id, otype=None, project_id=None, experiment_id=None, remote=None)
-#
-# add_attribute_set(id, name, otype=None, remote=None)
-# remove_attribute_set(id, name, otype=None, remote=None)
-#
-# # selections
-#
-# select(selection_id, stype=None, project_id=None, experiment_id=None, remote=None):
-#   -> returns an iterable of objects that were selected
-#
-# # datasets
-# get_all_datasets_from_remote(remote=None)
-# get_all_datasets_from_project(project_id, remote=None)
-# download_dataset_zipfile(dataset_id, output_file_path, remote=None):
-# unpublish_dataset(dataset_id, project_id=None, remote=None)
-# publish_dataset(dataset_id, project_id=None, remote=None)
-# publish_private_dataset(dataset_id, project_id=None, remote=None)
