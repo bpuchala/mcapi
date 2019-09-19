@@ -83,6 +83,7 @@ class ProcSubcommand(ListObjects):
         super(ProcSubcommand, self).__init__(
             ["proc"], "Process", "Processes", expt_member=True,
             list_columns=['name', 'owner', 'template_name', 'id', 'mtime'],
+            creatable=True,
             deletable=True,
             custom_selection_actions=['link_files', 'use_files', 'create_files', 'unlink_files', 'add_to_dataset', 'remove_from_dataset', 'create_dataset'],
             request_confirmation_actions={
@@ -109,6 +110,57 @@ class ProcSubcommand(ListObjects):
 
     def print_details(self, obj, out=sys.stdout):
         obj.pretty_print(shift=0, indent=2, out=out)
+
+    def create(self, args, out=sys.stdout):
+        """Create new process
+
+        Using:
+            mc proc <proc_name> [--desc <description>] [--ptype <proc type>] --create
+            mc proc --name <proc_name> [--desc <description>] [--ptype <proc type>] --create
+        """
+        from materials_commons.api.mc_object_utility import make_object
+
+        proj = clifuncs.make_local_project()
+
+        in_names = []
+        if args.expr:
+            in_names += args.expr
+        if args.name:
+            in_names += [args.name]
+
+        if len(in_names) != 1:
+            print('create one process at a time')
+            print('example: mc proc ProcName --create')
+            parser.print_help()
+            exit(1)
+
+        expt = clifuncs.make_local_expt(proj)
+        if args.template:
+            # if you use a template:
+            #   template_id = arg.template
+            #   template_name = <template name is template_id excluding the 'global_' prefix>
+            #   ptype = template_name
+            #   process_type = from template: one of "create"/"transform"/"measurement"/"analysis"
+            result = mc_raw_api.create_process_from_template(proj.id, expt.id, args.template, remote=proj.remote)
+            process = mcapi.Process(result)
+        else:
+            # TODO: make createProcess more flexible
+            #
+            # if you don't use a template:
+            #   template_id = "global_Generic Transform Samples Template"
+            #   template_name = <template name is template_id excluding the 'global_' prefix>
+            #   ptype = <same as process name> NOTE: confusingly, this is passed as 'process_type'
+            #   process_type = "transform"
+            process = mcapi.create_process(proj.id, experiment_id=expt.id, ptype=args.ptype)
+            pass
+
+        # resulting_objects = []
+        # for name in in_names:
+        #     dataset = mcapi.create_dataset(proj.id, name, description=args.desc, remote=proj.remote)
+        #     print('Created dataset:', dataset.id)
+        #     resulting_objects.append(dataset)
+        # self.output(resulting_objects, args, out=out)
+        return
 
     def delete(self, objects, args, dry_run, out=sys.stdout):
         if dry_run:
@@ -144,6 +196,16 @@ class ProcSubcommand(ListObjects):
 
     def add_custom_options(self, parser):
 
+        # for --create and --clone, set dataset name, description
+        parser.add_argument('--desc', type=str, default="", help='Create or add description, for use with --create, --clone, or --create-dataset.')
+        parser.add_argument('--name', type=str, default="", help='New process, for use with --create or --clone.')
+        parser.add_argument('--ptype', type=str, default="", help='Specify a custom process type, for use with --create or --clone.')
+        parser.add_argument('--template', type=str, default="", metavar="TEMPLATE_ID", help='Specify a process template, for use with --create or --clone. Must be a template id.')
+
+        # --clone
+        parser.add_argument('--clone', action="store_true", default=False, help='Clone the selected process. Only allowed for a single process.')
+
+
         # linking files
         parser.add_argument('--link-files', nargs="*", help='List of files to link to selected processes.')
         parser.add_argument('--use-files', nargs="*", help='List of input files to link to selected processes.')
@@ -154,7 +216,6 @@ class ProcSubcommand(ListObjects):
         parser.add_argument('--add-to-dataset', type=str, default="", metavar='DATASET_ID', help='Add selected processes to the dataset with given ID.')
         parser.add_argument('--remove-from-dataset', type=str, default="", metavar='DATASET_ID', help='Remove selected processes from the dataset with given ID.')
         parser.add_argument('--create-dataset', type=str, default="", metavar='DATASET_NAME', help='Create a new dataset with the selected processes.')
-        parser.add_argument('--desc', type=str, default="", help='For use with --create-dataset, set dataset description')
 
     def _link_files(self, objects, args, files, direction=None, out=sys.stdout):
         """Link files to processes (any direction)"""

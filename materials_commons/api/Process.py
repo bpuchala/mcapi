@@ -913,3 +913,140 @@ class Process(MCObject):
         api.add_samples_to_experiment(project.id, process.experiment.id, samples_id_list, apikey=self.project._apikey,
                                       remote=self.project.remote)
         return samples
+
+
+def create_process(project_id, name, ptype="", description="", experiment_id=None, process_attributes=[], remote=None):
+    """
+
+    :param project_id: str, required
+    :param name: str, The new process's name
+    :param ptype: str, The new process's type, stored in 'ptype'. Optional, default uses 'name',
+        but that is not recommended.
+    :param description: str, #TODO: Currently ignored.
+    :param experient_id: str, required
+    :process_attributes: list of objects,
+
+        The new process's attributes, with format:
+
+            process_attributes = [
+                {
+                   "name": <section name - for display>,
+                   "attribute": <section name - as id>,
+                   "properties": [
+                       {
+                           "name": <str, process attribute name>,
+                           "description": <str, process attribute description>,
+                           "otype": <str, process attribute otype>,
+                           "value": <JSON, process attribute value>,
+                           "unit": <str, process attribute units>
+                       },
+                       ...
+                   ]
+                },
+                ...
+            ]
+
+    .. note::
+
+        #TODO Process "setup" / attributes needs to be cleaned up. Currently "process_attributes" is stored as "setup" and there are groups of setup properties, so this is closest to the idea of an attribute set.
+
+        To create a new process using a template, use :func:`api.create_process_from_template`.
+    """
+    result = api.post_v3(
+        "createProcess",
+        {
+            'project_id': project_id,
+            'experiment_id': experiment_id,
+            'name': name,
+            'description': description,
+            'process_type': ptype,
+            'attributes': process_attributes
+        },
+        remote=remote)['data']
+    return Process(result)
+
+def create_process_with_template(project_id, name, template_id="", description="",  process_attributes=[], experiment_id=None, remote=None):
+    """Create a process using a template.
+
+    Generally it is now preferred to use :func:`create_process`.
+
+    :param project_id: str, required
+    :param name: str, The new process's name
+    :param template_id: str, The new process's template_id. Will set ptype=<template name>, where temlate name exclude the initial scoping portion of the template id. (typically 'global_<template name>'.
+    :param description: str, #TODO: Currently ignored.
+    :param experient_id: str, required
+    :process_attributes: list of objects,
+
+        The new process's attributes, with format:
+
+            process_attributes = [
+                {
+                   "name": <section name - for display>,
+                   "attribute": <section name - as id>,
+                   "properties": [
+                       {
+                           "name": <str, process attribute name>,
+                           "description": <str, process attribute description>,
+                           "otype": <str, process attribute otype>,
+                           "value": <JSON, process attribute value>,
+                           "unit": <str, process attribute units>
+                       },
+                       ...
+                   ]
+                },
+                ...
+            ]
+
+    .. note::
+
+        #TODO Process "setup" / attributes needs to be cleaned up. Currently "process_attributes" is stored as "setup" and there are groups of setup properties, so this is closest to the idea of an attribute set.
+
+        To create a new process using a template, use :func:`api.create_process_from_template`.
+    """
+    result = api.create_process_from_template(project_id, experiment_id, template_id, remote=remote)
+    result = api.push_name_for_process(project_id, result['id'], name, remote=remote)
+    # result = ?update process attributes?
+    return Process(result)
+
+def update_process_attributes(project_id, process_id, process_attributes, remote=None):
+    """
+
+        asets: {
+            "aset_name": <attr>,
+            ...
+        }
+
+        attr: {
+            name: <name>,
+            best_measure_id: <id>,
+
+            id: <id>,
+
+            values: {
+                <id>: {units, value, value_dtype, uncertainty, uncertainty_dtype},
+                ...
+            },
+
+            create_values: [
+                {units, value, value_dtype, uncertainty, uncertainty_dtype},
+                ...
+            ]
+
+
+        }
+
+        process_attributes = {
+            "attribute_sets": {
+                "set1_name": {
+                    "attr1_name": {
+                        "otype": "",
+                        "value":
+                        "units":
+                    }
+                }
+            }
+
+
+        }
+    """
+    pass
